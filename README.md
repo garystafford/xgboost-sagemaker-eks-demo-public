@@ -152,7 +152,7 @@ python3 -m pip install "sagemaker==3.15.0"
 
 This command is the manual trigger for the SageMaker training pipeline. It creates or updates the pipeline definition, starts a new pipeline execution, trains the model, evaluates it, and registers the resulting model package.
 
-Run it from the project directory:
+Run the pipeline from the project directory:
 
 ```bash
 cd /path/to/project
@@ -203,7 +203,7 @@ MODEL_PACKAGE_ARN=$(aws sagemaker list-model-packages \
 echo "$MODEL_PACKAGE_ARN"
 ```
 
-Approve a pending package manually:
+Optionally, approve a pending package manually:
 
 ```bash
 aws sagemaker update-model-package \
@@ -285,7 +285,7 @@ Important source-auth notes:
 - The working project-specific setting still uses the selected CodeConnections connection ARN above.
 - Keep `Use override credentials for this project only` checked for this working configuration.
 - After changing `buildspec.yml`, commit and push before rerunning CodeBuild. The project pulls `main` from GitHub.
-- The repository field must be a valid GitHub URL. The working URL format is:
+- The repository field must be a valid GitHub URL (no `.git`). The working URL format is:
 
 ```text
 https://github.com/YOUR_GITHUB_USER/YOUR_REPOSITORY
