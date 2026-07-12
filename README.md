@@ -1,4 +1,6 @@
-# End-to-End ML Workflow from SageMaker Training to EKS Deployment
+# End-to-End ML Workflow on AWS
+
+## From SageMaker Training to EKS Deployment
 
 This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. The MLOps workflow uses [Amazon SageMaker AI Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html) to train an XGBoost regression model and register it in [Amazon SageMaker AI Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html). After the model is approved, the DevOps workflow uses [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/) and [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr/) to package and deploy the model-serving application to [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/eks/). [Amazon EventBridge](https://docs.aws.amazon.com/eventbridge/) connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
 
