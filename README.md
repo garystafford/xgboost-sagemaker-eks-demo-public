@@ -12,7 +12,7 @@ This project demonstrates how MLOps and DevOps practices work together to delive
 
 ![SageMaker Pipeline](./screengrabs/sagemaker_model_registry.png)
 
-![SageMaker Pipeline](./screengrabs/eventbridge.png)
+![SageMaker Pipeline](./screengrabs/eventbridge_pattern.png)
 
 ![SageMaker Pipeline](./screengrabs/codebuild.png)
 
