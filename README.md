@@ -68,6 +68,19 @@ Before running the workflow, make sure these pieces exist.
 
 _GitHub is optional. Adjust the CodeBuild project configuration to meet your requirements._
 
+## IAM Roles Used
+
+This project uses three IAM roles and one EKS authorization mapping. Code in the README creates the two deployment automation roles; the SageMaker execution role is a prerequisite.
+
+| Role or mapping                        | Created in this README?              | Purpose                                                                                                                                                                                                                              |
+| -------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| SageMaker execution role               | No                                   | Used by `pipeline.py` for SageMaker processing, training, evaluation, and model registration. This comes from the SageMaker Studio or notebook environment where `get_execution_role()` runs.                                        |
+| `CodeBuildServiceRole`                 | Yes                                  | Used by CodeBuild to read the approved model artifact from S3, read SageMaker Model Registry metadata, push the image to ECR, use the GitHub CodeConnections source credential, describe the EKS cluster, and write CloudWatch Logs. |
+| EKS access entry or `aws-auth` mapping | Yes, as a cluster authorization step | Authorizes `CodeBuildServiceRole` inside the Kubernetes cluster so `kubectl apply` and rollout commands can run. This is not a separate IAM role.                                                                                    |
+| `EventBridgeCodeBuildRole`             | Yes                                  | Used by EventBridge to call `codebuild:StartBuild` when a SageMaker model package changes to `Approved`.                                                                                                                             |
+
+The AWS identity running these setup commands also needs permission to create IAM roles and policies, pass roles to AWS services, create EventBridge rules and targets, configure EKS access, create or inspect ECR repositories, and upload the dataset to S3.
+
 ## Environment
 
 Replace these values for your account.
