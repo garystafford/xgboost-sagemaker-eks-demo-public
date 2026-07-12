@@ -1,0 +1,81 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_ACCOUNT_ID: "676164205626"
+    AWS_DEFAULT_REGION: "us-east-1"
+    IMAGE_REPO_NAME: "demo-xgboost-reg-service"
+    EKS_CLUSTER_NAME: "deepfake-pytorch-eks"
+    EKS_NAMESPACE: "ml-inference"
+    MODEL_PACKAGE_GROUP: "xgboost-regression-models"
+
+phases:
+  install:
+    commands:
+      - echo Installing kubectl and template renderer...
+      - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+      - chmod +x kubectl && mv kubectl /usr/local/bin/
+      - |
+        if ! command -v envsubst >/dev/null 2>&1; then
+          if command -v yum >/dev/null 2>&1; then
+            yum install -y gettext
+          else
+            apt-get update && apt-get install -y gettext-base
+          fi
+        fi
+
+  pre_build:
+    commands:
+      - test -f Dockerfile
+      - test -f app.py
+      - test -f deployment.yaml.tpl
+      - echo Logging in to ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+      - echo Fetching latest approved model version...
+      - |
+        MODEL_PACKAGE_ARN=$(aws sagemaker list-model-packages \
+          --model-package-group-name $MODEL_PACKAGE_GROUP \
+          --model-approval-status Approved \
+          --sort-by CreationTime \
+          --sort-order Descending \
+          --max-results 1 \
+          --query 'ModelPackageSummaryList[0].ModelPackageArn' \
+          --output text)
+        test "$MODEL_PACKAGE_ARN" != "None"
+        MODEL_S3_URI=$(aws sagemaker describe-model-package \
+          --model-package-name "$MODEL_PACKAGE_ARN" \
+          --query 'InferenceSpecification.Containers[0].ModelDataUrl' \
+          --output text)
+        test "$MODEL_S3_URI" != "None"
+        echo "Model package: $MODEL_PACKAGE_ARN"
+        echo "Model artifact location: $MODEL_S3_URI"
+      - echo Downloading and extracting model...
+      - aws s3 cp "$MODEL_S3_URI" model.tar.gz
+      - tar -xzf model.tar.gz
+      - test -f xgboost-model
+      - ls -la
+
+      - echo Determining image tag...
+      - export IMAGE_TAG=$(date +%Y%m%d%H%M%S)
+      - 'echo "Image tag: $IMAGE_TAG"'
+
+  build:
+    commands:
+      - echo Building Docker image...
+      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - if [ "$CODEBUILD_BUILD_SUCCEEDING" = "0" ]; then echo "Build failed; skipping push and deploy."; exit 1; fi
+      - echo Pushing image to ECR...
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
+
+      - echo Rendering and applying EKS deployment...
+      - aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_DEFAULT_REGION
+      - envsubst < deployment.yaml.tpl > deployment.yaml
+      - kubectl apply -f deployment.yaml
+      - kubectl rollout status deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE --timeout=120s
+
+      - echo Deployment complete.
