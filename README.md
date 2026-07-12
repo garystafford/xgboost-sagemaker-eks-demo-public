@@ -10,6 +10,8 @@ The sample Abalone dataset for this project can be found on [Kaggle](https://www
 
 ![SageMaker Pipeline](./screengrabs/codebuild.png)
 
+![SageMaker Pipeline](./screengrabs/ecr.png)
+
 ## Files
 
 | File                                      | Purpose                                                                  |
