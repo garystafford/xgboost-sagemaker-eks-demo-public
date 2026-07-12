@@ -74,13 +74,14 @@ python3 -m pip install --upgrade pip
 python3 -m pip install "sagemaker==3.15.0"
 ```
 
-## Run The SageMaker Pipeline
+## Trigger The SageMaker Training Pipeline
 
-Run from the project directory:
+This command is the manual trigger for the SageMaker training pipeline. It creates or updates the pipeline definition, starts a new pipeline execution, trains the model, evaluates it, and registers the resulting model package.
+
+Run it from the project directory:
 
 ```bash
-cd /path/to/xgboost-demo-public
-rm -rf __pycache__ .ipynb_checkpoints
+cd /path/to/project
 
 python3 -B ./pipeline.py --submit \
   --input-data $DATA_S3_URI \
