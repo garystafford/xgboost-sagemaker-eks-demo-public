@@ -20,200 +20,7 @@ from sagemaker.mlops.workflow.steps import ProcessingStep, TrainingStep
 from sagemaker.train import ModelTrainer
 
 
-PREPROCESS_SCRIPT = r"""
-import argparse
-from pathlib import Path
-from urllib.parse import urlparse
-
-import boto3
-import pandas as pd
-from sklearn.model_selection import train_test_split
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input-data", required=True)
-    parser.add_argument("--target-column", default="__last__")
-    args = parser.parse_args()
-
-    parsed = urlparse(args.input_data)
-    s3 = boto3.client("s3")
-    obj = s3.get_object(Bucket=parsed.netloc, Key=parsed.path.lstrip("/"))
-    df = pd.read_csv(obj["Body"])
-
-    if df.empty:
-        raise ValueError("Input CSV is empty.")
-
-    target_column = df.columns[-1] if args.target_column == "__last__" else args.target_column
-    if target_column not in df.columns:
-        raise ValueError(
-            f"Target column '{target_column}' not found. Available columns: {list(df.columns)}"
-        )
-
-    y = pd.to_numeric(df[target_column], errors="raise")
-    x = df.drop(columns=[target_column])
-    x = pd.get_dummies(x, dummy_na=True)
-    x = x.apply(pd.to_numeric, errors="coerce").fillna(0)
-    x.insert(0, target_column, y)
-
-    train_df, temp_df = train_test_split(x, test_size=0.3, random_state=42)
-    val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42)
-
-    outputs = {
-        "train": train_df,
-        "validation": val_df,
-        "test": test_df,
-    }
-
-    for channel_name, split_df in outputs.items():
-        output_dir = Path("/opt/ml/processing") / channel_name
-        output_dir.mkdir(parents=True, exist_ok=True)
-        split_df.to_csv(output_dir / "data.csv", index=False, header=False)
-        print(f"Wrote {channel_name}: {split_df.shape[0]} rows, {split_df.shape[1]} columns")
-
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-EVALUATE_SCRIPT = r"""
-import argparse
-import json
-import tarfile
-from pathlib import Path
-from urllib.parse import urlparse
-
-import boto3
-import numpy as np
-import pandas as pd
-import xgboost as xgb
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model-s3-uri", required=True)
-    parser.add_argument("--test-data-dir", required=True)
-    parser.add_argument("--output-dir", required=True)
-    args = parser.parse_args()
-
-    s3 = boto3.client("s3")
-
-    parsed_model = urlparse(args.model_s3_uri)
-    model_tar_path = "/tmp/model.tar.gz"
-    model_dir = Path("/tmp/model")
-    model_dir.mkdir(parents=True, exist_ok=True)
-
-    s3.download_file(parsed_model.netloc, parsed_model.path.lstrip("/"), model_tar_path)
-    with tarfile.open(model_tar_path) as tar:
-        tar.extractall(model_dir)
-
-    booster = xgb.Booster()
-    booster.load_model(str(model_dir / "xgboost-model"))
-
-    test_df = pd.read_csv(Path(args.test_data_dir) / "data.csv", header=None)
-    y_test = test_df.iloc[:, 0].values
-    x_test = test_df.iloc[:, 1:].values
-    predictions = booster.predict(xgb.DMatrix(x_test))
-
-    rmse = float(np.sqrt(np.mean((y_test - predictions) ** 2)))
-    denominator = np.sum((y_test - np.mean(y_test)) ** 2)
-    r2 = float(1 - np.sum((y_test - predictions) ** 2) / denominator)
-
-    report = {
-        "regression_metrics": {
-            "rmse": {"value": rmse},
-            "r2_score": {"value": r2},
-        },
-        "model_s3_uri": args.model_s3_uri,
-    }
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "evaluation.json").write_text(json.dumps(report), encoding="utf-8")
-
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-REGISTER_MODEL_SCRIPT = r"""
-import argparse
-
-import boto3
-from botocore.exceptions import ClientError
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model-s3-uri", required=True)
-    parser.add_argument("--metrics-s3-uri", required=True)
-    parser.add_argument("--approval-status", required=True)
-    parser.add_argument("--inference-image-uri", required=True)
-    parser.add_argument("--model-package-group-name", required=True)
-    parser.add_argument("--region", required=True)
-    args = parser.parse_args()
-
-    sm_client = boto3.client("sagemaker", region_name=args.region)
-
-    try:
-        sm_client.create_model_package_group(
-            ModelPackageGroupName=args.model_package_group_name,
-            ModelPackageGroupDescription="XGBoost regression models for EKS deployment",
-        )
-    except ClientError as exc:
-        error_code = exc.response.get("Error", {}).get("Code", "")
-        error_message = exc.response.get("Error", {}).get("Message", "")
-        if error_code != "ValidationException" or "already exists" not in error_message:
-            raise
-
-    response = sm_client.create_model_package(
-        ModelPackageGroupName=args.model_package_group_name,
-        ModelApprovalStatus=args.approval_status,
-        InferenceSpecification={
-            "Containers": [
-                {
-                    "Image": args.inference_image_uri,
-                    "ModelDataUrl": args.model_s3_uri,
-                }
-            ],
-            "SupportedContentTypes": ["text/csv"],
-            "SupportedResponseMIMETypes": ["text/csv"],
-        },
-        ModelMetrics={
-            "ModelQuality": {
-                "Statistics": {
-                    "ContentType": "application/json",
-                    "S3Uri": args.metrics_s3_uri,
-                }
-            }
-        },
-    )
-
-    print(response["ModelPackageArn"])
-
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-def write_processing_scripts():
-    code_dir = Path(__file__).resolve().parent / "code"
-    code_dir.mkdir(parents=True, exist_ok=True)
-    (code_dir / "preprocess.py").write_text(
-        PREPROCESS_SCRIPT.strip() + "\n", encoding="utf-8"
-    )
-    (code_dir / "evaluate.py").write_text(
-        EVALUATE_SCRIPT.strip() + "\n", encoding="utf-8"
-    )
-    (code_dir / "register_model.py").write_text(
-        REGISTER_MODEL_SCRIPT.strip() + "\n", encoding="utf-8"
-    )
-
-
-write_processing_scripts()
+CODE_DIR = Path(__file__).resolve().parent / "code"
 
 pipeline_session = PipelineSession()
 role = get_execution_role()
@@ -258,7 +65,7 @@ preprocess_processor = ScriptProcessor(
 )
 
 preprocess_args = preprocess_processor.run(
-    code="code/preprocess.py",
+    code=str(CODE_DIR / "preprocess.py"),
     arguments=["--input-data", input_data_uri, "--target-column", target_column],
     outputs=[
         ProcessingOutput(
@@ -367,7 +174,7 @@ evaluation_processor = ScriptProcessor(
 )
 
 evaluation_args = evaluation_processor.run(
-    code="code/evaluate.py",
+    code=str(CODE_DIR / "evaluate.py"),
     inputs=[
         ProcessingInput(
             input_name="test",
@@ -443,7 +250,7 @@ register_processor = ScriptProcessor(
 )
 
 register_args = register_processor.run(
-    code="code/register_model.py",
+    code=str(CODE_DIR / "register_model.py"),
     arguments=[
         "--model-s3-uri",
         best_model_s3_uri,

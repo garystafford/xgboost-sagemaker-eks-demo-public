@@ -21,6 +21,10 @@ The sample Abalone dataset for this project can be found on [Kaggle](https://www
 | File                                      | Purpose                                                                  |
 | ----------------------------------------- | ------------------------------------------------------------------------ |
 | `pipeline.py`                             | SageMaker SDK v3 pipeline definition and CLI entrypoint.                 |
+| `PIPELINE.md`                             | Detailed walkthrough of `pipeline.py` and its SageMaker Pipeline steps.  |
+| `code/preprocess.py`                      | Processing script that prepares train/validation/test data splits.       |
+| `code/evaluate.py`                        | Processing script that evaluates the trained XGBoost model.              |
+| `code/register_model.py`                  | Processing script that registers the model package in SageMaker.         |
 | `app.py`                                  | FastAPI inference service loaded into the Docker image.                  |
 | `Dockerfile`                              | Builds the inference container.                                          |
 | `buildspec.yml`                           | CodeBuild recipe. CodeBuild reads this every deployment run.             |
@@ -133,6 +137,8 @@ python3 -B ./pipeline.py --submit \
   --model-approval-status Approved \
   --wait
 ```
+
+The command is unchanged for the multi-file layout, but keep the checked-in `code/` directory next to `pipeline.py`. The pipeline references `code/preprocess.py`, `code/evaluate.py`, and `code/register_model.py` when it builds the SageMaker processing steps.
 
 The pipeline stages are:
 
