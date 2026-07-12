@@ -1,8 +1,6 @@
 # End-to-End ML Workflow from SageMaker Training to EKS Deployment
 
-This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. The MLOps workflow uses Amazon SageMaker Pipelines to train an XGBoost regression model and register it in SageMaker Model Registry. After the model is approved, the DevOps workflow uses AWS CodeBuild and Amazon ECR to package and deploy the model-serving application to Amazon EKS. Amazon EventBridge connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
-
-The sample Abalone dataset for this project can be found on [Kaggle](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset).
+This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. The MLOps workflow uses [Amazon SageMaker AI Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html) to train an XGBoost regression model and register it in [Amazon SageMaker AI Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html). After the model is approved, the DevOps workflow uses [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/) and [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr/) to package and deploy the model-serving application to [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/eks/). [Amazon EventBridge](https://docs.aws.amazon.com/eventbridge/) connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
 
 ![SageMaker Pipeline](./screengrabs/sagemaker_pipelines.png)
 
@@ -11,6 +9,10 @@ The sample Abalone dataset for this project can be found on [Kaggle](https://www
 ![SageMaker Pipeline](./screengrabs/codebuild.png)
 
 ![SageMaker Pipeline](./screengrabs/ecr.png)
+
+## Dataset
+
+The sample Abalone dataset for this project can be found on [Kaggle](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset). The Abalone dataset is a classic tabular dataset used primarily for regression. In ML with XGBoost, it serves as a standard benchmark to predict the age of abalones based on eight easily obtainable physical measurements.
 
 ## Files
 
@@ -42,7 +44,7 @@ flowchart TD
     end
 
     subgraph Source["GitHub source"]
-        S1["YOUR_GITHUB_USER/YOUR_REPOSITORY"]
+        S1["Private GitHub repository"]
         S2["CodeConnections connection"]
         S1 --> S2
     end
@@ -56,8 +58,8 @@ flowchart TD
         L --> M["Build Docker image"]
         M --> N["Push image to ECR"]
         N --> O["Render deployment.yaml.tpl"]
-        O --> P["kubectl apply"]
-        P --> Q["EKS service in ml-inference"]
+        O --> P["kubectl apply to deploy inference container"]
+        P --> Q["Expose the inference endpoint"]
     end
 ```
 
@@ -72,7 +74,7 @@ Before running the workflow, make sure these pieces exist.
 | Raw training CSV in S3               | The pipeline reads the input CSV from `DATA_S3_URI`; it does not read the local CSV directly. The S3 bucket must already exist.                                                                                                 |
 | Existing EKS cluster                 | CodeBuild deploys the approved model-serving container to this cluster.                                                                                                                                                         |
 | CodeBuild access to EKS              | The CodeBuild service role must be authorized in EKS before `kubectl apply` can work.                                                                                                                                           |
-| Private GitHub source access*        | CodeBuild pulls `buildspec.yml`, `Dockerfile`, `app.py`, and `deployment.yaml.tpl` from this repo.                                                                                                                              |
+| Private GitHub source access\*       | CodeBuild pulls `buildspec.yml`, `Dockerfile`, `app.py`, and `deployment.yaml.tpl` from this repo.                                                                                                                              |
 | ECR repository setup                 | CodeBuild pushes the model-serving image to ECR before deploying it to EKS. The setup command below creates the repository if needed.                                                                                           |
 | SageMaker SDK v3 client              | The local/Studio Python environment that runs `pipeline.py` needs `sagemaker==3.15.0`.                                                                                                                                          |
 
@@ -107,7 +109,7 @@ export CODEBUILD_SERVICE_ROLE_NAME=CodeBuildServiceRole
 export DATA_S3_URI=s3://my-sagemaker-bucket/path/to/abalone.csv
 ```
 
-Install the SageMaker SDK v3 client where you run `pipeline.py`.
+Install [SageMaker Python SDK v3.0](https://sagemaker.readthedocs.io/en/stable/) where you run `pipeline.py`.
 
 ```bash
 python3 -m pip install --upgrade pip
@@ -454,6 +456,15 @@ kubectl rollout history deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE
 kubectl rollout undo deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE
 kubectl rollout undo deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE --to-revision=3
 ```
+
+## References
+
+Here are a few useful references:
+
+- [Amazon SageMaker AI Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html)
+- [SageMaker Python SDK V3](https://sagemaker.readthedocs.io/en/stable/index.html)
+- [SageMaker Python SDK on GitHub](https://github.com/aws/sagemaker-python-sdk)
+- [Overview of AI and ML on Amazon EKS](https://docs.aws.amazon.com/eks/latest/userguide/ml-on-eks.html)
 
 ## License
 
