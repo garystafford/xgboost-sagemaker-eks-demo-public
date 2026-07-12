@@ -2,19 +2,39 @@
 
 ## From SageMaker Training to EKS Deployment
 
-This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. The MLOps workflow uses [Amazon SageMaker AI Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html) to train an XGBoost regression model using a [Amazon SageMaker AI Training job](https://docs.aws.amazon.com/sagemaker/latest/dg/use-training-plan-for-training-jobs-using-console.html) and register it in [Amazon SageMaker AI Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html). After the model is approved, the DevOps workflow uses [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/) and [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr/) to package and deploy the model-serving application to [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/eks/). [Amazon EventBridge](https://docs.aws.amazon.com/eventbridge/) connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
+This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. The MLOps workflow uses [Amazon SageMaker AI Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html) to train an XGBoost regression model using an [Amazon SageMaker AI Training Job](https://docs.aws.amazon.com/sagemaker/latest/dg/use-training-plan-for-training-jobs-using-console.html) and register it in [Amazon SageMaker AI Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html). After the model is approved, the DevOps workflow uses [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/) and [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr/) to package and deploy the model-serving application to [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/eks/). [Amazon EventBridge](https://docs.aws.amazon.com/eventbridge/) connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
+
+### Previews
+
+Amazon SageMaker AI Pipelines
 
 ![SageMaker Pipeline](./screengrabs/sagemaker_pipeline_execution_list.png)
 
+Amazon SageMaker AI Pipelines
+
 ![SageMaker Pipeline](./screengrabs/sagemaker_pipelines.png)
+
+Amazon SageMaker AI Training Job
 
 ![SageMaker Pipeline](./screengrabs/sagemaker_training.png)
 
+Amazon SageMaker AI Model Registry
+
 ![SageMaker Pipeline](./screengrabs/sagemaker_model_registry.png)
+
+Amazon SageMaker AI Model Registry
+
+![SageMaker Pipeline](./screengrabs/sagemaker_model_lineage.png)
+
+Amazon EventBridge
 
 ![SageMaker Pipeline](./screengrabs/eventbridge_pattern.png)
 
+AWS CodeBuild
+
 ![SageMaker Pipeline](./screengrabs/codebuild.png)
+
+Amazon Elastic Container Registry (Amazon ECR)
 
 ![SageMaker Pipeline](./screengrabs/ecr.png)
 
