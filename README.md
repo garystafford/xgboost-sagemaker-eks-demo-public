@@ -415,3 +415,11 @@ kubectl rollout history deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE
 kubectl rollout undo deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE
 kubectl rollout undo deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE --to-revision=3
 ```
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Disclaimer
+
+The contents of this repository represent my viewpoints and not those of my past or current employers, including Amazon Web Services (AWS). All third-party libraries, modules, plugins, and SDKs are the property of their respective owners.
