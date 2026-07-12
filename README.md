@@ -51,6 +51,23 @@ flowchart TD
     end
 ```
 
+## Prerequisites
+
+Before running the workflow, make sure these pieces exist.
+
+| Requirement                          | Why it is needed                                                                                                                                                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AWS CLI authenticated to the account | Used to create IAM roles, upload data to S3, inspect SageMaker, create EventBridge rules, and start CodeBuild.                                                                                                                  |
+| SageMaker execution role             | `pipeline.py` calls `get_execution_role()` and uses that role for processing, training, evaluation, and registration jobs. Run it from SageMaker Studio or another SageMaker environment where the execution role is available. |
+| Raw training CSV in S3               | The pipeline reads the input CSV from `DATA_S3_URI`; it does not read the local CSV directly. The S3 bucket must already exist.                                                                                                 |
+| Existing EKS cluster                 | CodeBuild deploys the approved model-serving container to this cluster.                                                                                                                                                         |
+| CodeBuild access to EKS              | The CodeBuild service role must be authorized in EKS before `kubectl apply` can work.                                                                                                                                           |
+| Private GitHub source access*        | CodeBuild pulls `buildspec.yml`, `Dockerfile`, `app.py`, and `deployment.yaml.tpl` from this repo.                                                                                                                              |
+| ECR repository setup                 | CodeBuild pushes the model-serving image to ECR before deploying it to EKS. The setup command below creates the repository if needed.                                                                                           |
+| SageMaker SDK v3 client              | The local/Studio Python environment that runs `pipeline.py` needs `sagemaker==3.15.0`.                                                                                                                                          |
+
+_GitHub is optional. Adjust the CodeBuild project configuration to meet your requirements._
+
 ## Environment
 
 Replace these values for your account.
