@@ -1,8 +1,6 @@
 # SageMaker-to-EKS MLOps/DevOps Demo
 
-This project trains an XGBoost regression model with SageMaker Pipelines, registers the model in SageMaker Model Registry, and deploys the approved model to Amazon EKS through EventBridge, ECR, and CodeBuild.
-
-The executable code and configuration live in real project files. The docs reference those files instead of copying their contents.
+This project trains an XGBoost regression model with SageMaker Pipelines, registers the model in SageMaker Model Registry, and deploys the approved model to Amazon EKS through EventBridge, ECR, and CodeBuild. 
 
 ## Files
 
