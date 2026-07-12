@@ -238,6 +238,19 @@ aws iam get-role --role-name $CODEBUILD_SERVICE_ROLE_NAME --query 'Role.AssumeRo
 sleep 15
 ```
 
+## Create ECR Repository
+
+Create the ECR repository once if it does not exist:
+
+```bash
+aws ecr describe-repositories \
+  --repository-names $IMAGE_REPO_NAME \
+  --region $AWS_DEFAULT_REGION >/dev/null 2>&1 || \
+aws ecr create-repository \
+  --repository-name $IMAGE_REPO_NAME \
+  --region $AWS_DEFAULT_REGION
+```
+
 ## Create CodeBuild Project
 
 Create the CodeBuild project once. `buildspec.yml` is the recipe CodeBuild uses every time the job runs.
@@ -289,17 +302,6 @@ aws codebuild batch-get-projects \
 ```
 
 When source download works, the build logs show `Phase is DOWNLOAD_SOURCE` followed by `CODEBUILD_SRC_DIR=.../src/github.com/YOUR_GITHUB_USER/YOUR_REPOSITORY`.
-
-Create the ECR repository once if it does not exist:
-
-```bash
-aws ecr describe-repositories \
-  --repository-names $IMAGE_REPO_NAME \
-  --region $AWS_DEFAULT_REGION >/dev/null 2>&1 || \
-aws ecr create-repository \
-  --repository-name $IMAGE_REPO_NAME \
-  --region $AWS_DEFAULT_REGION
-```
 
 Start a manual test build:
 
