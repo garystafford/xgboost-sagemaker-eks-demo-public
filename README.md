@@ -14,7 +14,7 @@ This project demonstrates how MLOps and DevOps practices work together to delive
 
 ## Dataset
 
-The sample Abalone dataset for this project can be found on [Kaggle](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset). The Abalone dataset is a classic tabular dataset used primarily for regression. In ML with XGBoost, it serves as a standard benchmark to predict the age of abalones based on eight easily obtainable physical measurements.
+The sample Abalone dataset for this project can be found on [Kaggle](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset). The Abalone dataset is a classic tabular dataset used primarily for regression. In ML, XGBoost is a standard benchmark for predicting the age of abalones based on eight easily obtainable physical measurements.
 
 ## Files
 
