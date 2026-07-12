@@ -2,6 +2,8 @@
 
 This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. The MLOps workflow uses Amazon SageMaker Pipelines to train an XGBoost regression model and register it in SageMaker Model Registry. After the model is approved, the DevOps workflow uses AWS CodeBuild and Amazon ECR to package and deploy the model-serving application to Amazon EKS. Amazon EventBridge connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
 
+The sample Abalone dataset for this project can be found on [Kaggle](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset).
+
 ![SageMaker Pipeline](./screengrabs/sagemaker_pipelines.png)
 
 ![SageMaker Pipeline](./screengrabs/sagemaker_model_registry.png)
