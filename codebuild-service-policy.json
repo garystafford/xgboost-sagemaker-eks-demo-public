@@ -18,8 +18,8 @@
         "s3:GetBucketLocation"
       ],
       "Resource": [
-        "arn:aws:s3:::sagemaker-us-east-1-676164205626",
-        "arn:aws:s3:::sagemaker-us-east-1-676164205626/*"
+        "arn:aws:s3:::my-sagemaker-bucket",
+        "arn:aws:s3:::my-sagemaker-bucket/*"
       ]
     },
     {
@@ -59,7 +59,7 @@
         "codeconnections:PassConnection",
         "codeconnections:UseConnection"
       ],
-      "Resource": "arn:aws:codeconnections:us-east-1:676164205626:connection/378cf90f-25a6-4066-84df-5f0c30d0c124"
+      "Resource": "arn:aws:codeconnections:us-east-1:123456789012:connection/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
     }
   ]
 }

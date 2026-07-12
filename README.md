@@ -33,9 +33,9 @@ flowchart TD
         G --> H["Approved model package"]
     end
 
-    subgraph Source["Private GitHub source"]
-        S1["garystafford/xgboost-sagemaker-eks-demo"]
-        S2["CodeConnections credential"]
+    subgraph Source["GitHub source"]
+        S1["YOUR_GITHUB_USER/YOUR_REPOSITORY"]
+        S2["CodeConnections connection"]
         S1 --> S2
     end
 
@@ -58,15 +58,15 @@ flowchart TD
 Replace these values for your account.
 
 ```bash
-export AWS_ACCOUNT_ID=676164205626
+export AWS_ACCOUNT_ID=123456789012
 export AWS_DEFAULT_REGION=us-east-1
-export EKS_CLUSTER_NAME=deepfake-pytorch-eks
+export EKS_CLUSTER_NAME=my-eks-cluster
 export EKS_NAMESPACE=ml-inference
 export IMAGE_REPO_NAME=demo-xgboost-reg-service
 export MODEL_PACKAGE_GROUP=xgboost-regression-models
 export CODEBUILD_PROJECT_NAME=xgboost-eks-deploy
 export CODEBUILD_SERVICE_ROLE_NAME=CodeBuildServiceRole
-export DATA_S3_URI=s3://sagemaker-us-east-1-676164205626/sagemaker/kaggle_dataset/abalone.csv
+export DATA_S3_URI=s3://my-sagemaker-bucket/path/to/abalone.csv
 ```
 
 Install the SageMaker SDK v3 client where you run `pipeline.py`.
@@ -81,7 +81,7 @@ python3 -m pip install "sagemaker==3.15.0"
 Run from the project directory:
 
 ```bash
-cd /Users/garystaf/Documents/Projects/xgboost-demo
+cd /path/to/xgboost-demo-public
 rm -rf __pycache__ .ipynb_checkpoints
 
 python3 -B ./pipeline.py --submit \
@@ -178,10 +178,10 @@ Project name: xgboost-eks-deploy
 Source provider: GitHub
 Credential: CodeBuild managed OAuth token
 Use override credentials for this project only: checked
-Connection: arn:aws:codeconnections:us-east-1:676164205626:connection/378cf90f-25a6-4066-84df-5f0c30d0c124
+Connection: arn:aws:codeconnections:us-east-1:123456789012:connection/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 Only show secrets with tag codebuild:source: checked
 Repository: Repository in my GitHub account
-Repository URL: https://github.com/garystafford/xgboost-sagemaker-eks-demo
+Repository URL: https://github.com/YOUR_GITHUB_USER/YOUR_REPOSITORY
 Source version: main
 Buildspec: buildspec.yml
 Environment image: aws/codebuild/standard:7.0
@@ -200,7 +200,7 @@ Important source-auth notes:
 - The repository field must be a valid GitHub URL. The working URL format is:
 
 ```text
-https://github.com/garystafford/xgboost-sagemaker-eks-demo
+https://github.com/YOUR_GITHUB_USER/YOUR_REPOSITORY
 ```
 
 Confirm the project source configuration:
@@ -213,7 +213,7 @@ aws codebuild batch-get-projects \
   --output json
 ```
 
-When source download works, the build logs show `Phase is DOWNLOAD_SOURCE` followed by `CODEBUILD_SRC_DIR=.../src/github.com/garystafford/xgboost-sagemaker-eks-demo`.
+When source download works, the build logs show `Phase is DOWNLOAD_SOURCE` followed by `CODEBUILD_SRC_DIR=.../src/github.com/YOUR_GITHUB_USER/YOUR_REPOSITORY`.
 
 Create the ECR repository once if it does not exist:
 
@@ -383,7 +383,7 @@ The trust policy must include `"Service": "codebuild.amazonaws.com"`. If the rol
 If a build fails during `DOWNLOAD_SOURCE` with `Failed to get access token` or `authentication required for primary source`, fix the CodeBuild project source settings in the console. For this demo, the working path is GitHub with **Use override credentials for this project only** checked and this connection selected:
 
 ```text
-arn:aws:codeconnections:us-east-1:676164205626:connection/378cf90f-25a6-4066-84df-5f0c30d0c124
+arn:aws:codeconnections:us-east-1:123456789012:connection/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 Also re-attach `codebuild-service-policy.json` to `CodeBuildServiceRole` so the role can use that connection.

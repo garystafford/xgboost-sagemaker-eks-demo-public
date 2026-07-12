@@ -3,7 +3,7 @@
   "detail-type": ["SageMaker Model Package State Change"],
   "resources": [
     {
-      "prefix": "arn:aws:sagemaker:us-east-1:676164205626:model-package/xgboost-regression-models/"
+      "prefix": "arn:aws:sagemaker:us-east-1:123456789012:model-package/xgboost-regression-models/"
     }
   ],
   "detail": {
