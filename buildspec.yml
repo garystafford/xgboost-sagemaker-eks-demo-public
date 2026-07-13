@@ -7,7 +7,7 @@ env:
     IMAGE_REPO_NAME: "demo-xgboost-reg-service"
     EKS_CLUSTER_NAME: "my-eks-cluster"
     EKS_NAMESPACE: "ml-inference"
-    MODEL_PACKAGE_GROUP: "xgboost-regression-models"
+    MODEL_PACKAGE_ARN: ""
 
 phases:
   install:
@@ -32,23 +32,25 @@ phases:
       - echo Logging in to ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
-      - echo Fetching latest approved model version...
+      - echo Resolving approved model package...
       - |
-        MODEL_PACKAGE_ARN=$(aws sagemaker list-model-packages \
-          --model-package-group-name $MODEL_PACKAGE_GROUP \
-          --model-approval-status Approved \
-          --sort-by CreationTime \
-          --sort-order Descending \
-          --max-results 1 \
-          --query 'ModelPackageSummaryList[0].ModelPackageArn' \
-          --output text)
+        if [ -z "$MODEL_PACKAGE_ARN" ]; then
+          echo "MODEL_PACKAGE_ARN is required. EventBridge should pass the approved package ARN, or manual builds should use --environment-variables-override."
+          exit 1
+        fi
         test "$MODEL_PACKAGE_ARN" != "None"
+        echo "Using model package: $MODEL_PACKAGE_ARN"
+        MODEL_APPROVAL_STATUS=$(aws sagemaker describe-model-package \
+          --model-package-name "$MODEL_PACKAGE_ARN" \
+          --query 'ModelApprovalStatus' \
+          --output text)
+        test "$MODEL_APPROVAL_STATUS" = "Approved"
         MODEL_S3_URI=$(aws sagemaker describe-model-package \
           --model-package-name "$MODEL_PACKAGE_ARN" \
           --query 'InferenceSpecification.Containers[0].ModelDataUrl' \
           --output text)
         test "$MODEL_S3_URI" != "None"
-        echo "Model package: $MODEL_PACKAGE_ARN"
+        echo "Model approval status: $MODEL_APPROVAL_STATUS"
         echo "Model artifact location: $MODEL_S3_URI"
       - echo Downloading and extracting model...
       - aws s3 cp "$MODEL_S3_URI" model.tar.gz

@@ -1,23 +1,43 @@
 import argparse
 from pathlib import Path
 
-from sagemaker.core import image_uris
-from sagemaker.core.helper.session_helper import get_execution_role
-from sagemaker.core.processing import ScriptProcessor
-from sagemaker.core.shapes import (
-    ProcessingInput,
-    ProcessingOutput,
-    ProcessingS3Input,
-    ProcessingS3Output,
-)
-from sagemaker.core.training.configs import Compute, InputData, OutputDataConfig
-from sagemaker.core.workflow.functions import JsonGet, Join
-from sagemaker.core.workflow.parameters import ParameterString
-from sagemaker.core.workflow.pipeline_context import PipelineSession
-from sagemaker.core.workflow.properties import PropertyFile
-from sagemaker.mlops.workflow.pipeline import Pipeline
-from sagemaker.mlops.workflow.steps import ProcessingStep, TrainingStep
-from sagemaker.train import ModelTrainer
+try:
+    from sagemaker.core import image_uris
+    from sagemaker.core.helper.session_helper import get_execution_role
+    from sagemaker.core.parameter import ContinuousParameter, IntegerParameter
+    from sagemaker.core.processing import ScriptProcessor
+    from sagemaker.core.shapes import (
+        Channel,
+        DataSource,
+        ProcessingInput,
+        ProcessingOutput,
+        ProcessingS3Input,
+        ProcessingS3Output,
+        S3DataSource,
+    )
+    from sagemaker.core.training.configs import Compute, OutputDataConfig
+    from sagemaker.core.workflow.execution_variables import ExecutionVariables
+    from sagemaker.core.workflow.functions import JsonGet, Join
+    from sagemaker.core.workflow.parameters import ParameterString
+    from sagemaker.core.workflow.pipeline_context import PipelineSession
+    from sagemaker.core.workflow.properties import PropertyFile
+    from sagemaker.mlops.workflow.pipeline import Pipeline
+    from sagemaker.mlops.workflow.pipeline_experiment_config import (
+        PipelineExperimentConfig,
+        PipelineExperimentConfigProperties,
+    )
+    from sagemaker.mlops.workflow.steps import ProcessingStep, TuningStep
+    from sagemaker.train import ModelTrainer
+    from sagemaker.train.tuner import HyperparameterTuner
+except ModuleNotFoundError as exc:
+    if exc.name != "sagemaker":
+        raise
+    raise SystemExit(
+        "Missing SageMaker Python SDK. Install the project dependencies with:\n"
+        "  python3 -m pip install -r requirements.txt\n\n"
+        "Then rerun pipeline.py from SageMaker Studio or another environment "
+        "where get_execution_role() can resolve a SageMaker execution role."
+    ) from exc
 
 
 CODE_DIR = Path(__file__).resolve().parent / "code"
@@ -29,6 +49,8 @@ bucket = pipeline_session.default_bucket()
 
 pipeline_prefix = "xgboost-eks-pipeline"
 model_prefix = f"{pipeline_prefix}/models"
+DEFAULT_MAX_TUNING_JOBS = 8
+DEFAULT_MAX_PARALLEL_TUNING_JOBS = 2
 
 xgboost_image = image_uris.retrieve(
     framework="xgboost",
@@ -50,6 +72,12 @@ input_data_uri = ParameterString(name="InputDataS3Uri")
 target_column = ParameterString(name="TargetColumn", default_value="__last__")
 model_approval_status = ParameterString(
     name="ModelApprovalStatus", default_value="PendingManualApproval"
+)
+experiment_name = ParameterString(
+    name="ExperimentName", default_value="xgboost-eks-experiments"
+)
+mlflow_tracking_server_arn = ParameterString(
+    name="MlflowTrackingServerArn", default_value="__disabled__"
 )
 
 
@@ -101,12 +129,12 @@ preprocess_step = ProcessingStep(
 )
 
 
-# --- Step 2: Train XGBoost with ModelTrainer + TrainingStep ---
-model_trainer = ModelTrainer(
+# --- Step 2: Tune XGBoost with SageMaker Automatic Model Tuning ---
+xgboost_trainer = ModelTrainer(
     training_image=xgboost_image,
     role=role,
     sagemaker_session=pipeline_session,
-    base_job_name="xgboost-eks-train",
+    base_job_name="xgboost-eks-tune",
     compute=Compute(
         instance_type="ml.m5.xlarge",
         instance_count=1,
@@ -127,33 +155,73 @@ model_trainer = ModelTrainer(
     },
 )
 
-training_args = model_trainer.train(
-    input_data_config=[
-        InputData(
+tuner = HyperparameterTuner(
+    model_trainer=xgboost_trainer,
+    objective_metric_name="validation:rmse",
+    hyperparameter_ranges={
+        "eta": ContinuousParameter(0.01, 0.3, scaling_type="Logarithmic"),
+        "max_depth": IntegerParameter(3, 10),
+        "min_child_weight": ContinuousParameter(1, 10),
+        "subsample": ContinuousParameter(0.5, 1.0),
+        "colsample_bytree": ContinuousParameter(0.5, 1.0),
+    },
+    objective_type="Minimize",
+    strategy="Bayesian",
+    metric_definitions=[
+        {
+            "Name": "validation:rmse",
+            "Regex": r".*validation-rmse:([-+0-9.eE]+).*",
+        }
+    ],
+    max_jobs=DEFAULT_MAX_TUNING_JOBS,
+    max_parallel_jobs=DEFAULT_MAX_PARALLEL_TUNING_JOBS,
+    early_stopping_type="Auto",
+    base_tuning_job_name="xgboost-eks-hpo",
+)
+
+tuning_args = tuner.tune(
+    inputs=[
+        Channel(
             channel_name="train",
-            data_source=preprocess_step.properties.ProcessingOutputConfig.Outputs[
-                "train"
-            ].S3Output.S3Uri,
+            data_source=DataSource(
+                s3_data_source=S3DataSource(
+                    s3_data_type="S3Prefix",
+                    s3_uri=preprocess_step.properties.ProcessingOutputConfig.Outputs[
+                        "train"
+                    ].S3Output.S3Uri,
+                    s3_data_distribution_type="FullyReplicated",
+                )
+            ),
             content_type="text/csv",
         ),
-        InputData(
+        Channel(
             channel_name="validation",
-            data_source=preprocess_step.properties.ProcessingOutputConfig.Outputs[
-                "validation"
-            ].S3Output.S3Uri,
+            data_source=DataSource(
+                s3_data_source=S3DataSource(
+                    s3_data_type="S3Prefix",
+                    s3_uri=preprocess_step.properties.ProcessingOutputConfig.Outputs[
+                        "validation"
+                    ].S3Output.S3Uri,
+                    s3_data_distribution_type="FullyReplicated",
+                )
+            ),
             content_type="text/csv",
         ),
     ],
     wait=False,
 )
 
-training_step = TrainingStep(
-    name="TrainXGBoost",
-    step_args=training_args,
+tuning_step = TuningStep(
+    name="TuneXGBoost",
+    step_args=tuning_args,
     depends_on=[preprocess_step],
 )
 
-best_model_s3_uri = training_step.properties.ModelArtifacts.S3ModelArtifacts
+best_model_s3_uri = tuning_step.get_top_model_s3_uri(
+    top_k=0,
+    s3_bucket=bucket,
+    prefix=model_prefix,
+)
 
 
 # --- Step 3: Evaluate with ProcessingStep ---
@@ -212,7 +280,7 @@ evaluation_step = ProcessingStep(
     name="EvaluateModel",
     step_args=evaluation_args,
     property_files=[evaluation_report],
-    depends_on=[training_step],
+    depends_on=[tuning_step],
 )
 
 evaluation_s3_uri = Join(
@@ -238,7 +306,96 @@ rmse = JsonGet(
 )
 
 
-# --- Step 4: Register with a ProcessingStep ---
+# --- Step 4: Log the promoted model to SageMaker Experiments ---
+experiment_output_s3_uri = Join(
+    on="/",
+    values=[
+        f"s3://{bucket}/{pipeline_prefix}/experiments",
+        PipelineExperimentConfigProperties.TRIAL_NAME,
+    ],
+)
+
+experiment_report_s3_uri = Join(
+    on="/",
+    values=[
+        experiment_output_s3_uri,
+        "experiment_summary.json",
+    ],
+)
+
+experiment_logger = ScriptProcessor(
+    image_uri=sklearn_processing_image,
+    command=["python3"],
+    role=role,
+    instance_type="ml.m5.large",
+    instance_count=1,
+    base_job_name=f"{pipeline_prefix}-experiment",
+    sagemaker_session=pipeline_session,
+)
+
+experiment_args = experiment_logger.run(
+    code=str(CODE_DIR / "log_experiment.py"),
+    inputs=[
+        ProcessingInput(
+            input_name="evaluation",
+            s3_input=ProcessingS3Input(
+                s3_uri=evaluation_step.properties.ProcessingOutputConfig.Outputs[
+                    "evaluation"
+                ].S3Output.S3Uri,
+                local_path="/opt/ml/processing/evaluation",
+                s3_data_type="S3Prefix",
+                s3_input_mode="File",
+            ),
+        )
+    ],
+    outputs=[
+        ProcessingOutput(
+            output_name="experiment",
+            s3_output=ProcessingS3Output(
+                s3_uri=experiment_output_s3_uri,
+                local_path="/opt/ml/processing/experiment",
+                s3_upload_mode="EndOfJob",
+            ),
+        )
+    ],
+    arguments=[
+        "--experiment-name",
+        PipelineExperimentConfigProperties.EXPERIMENT_NAME,
+        "--mlflow-tracking-server-arn",
+        mlflow_tracking_server_arn,
+        "--trial-name",
+        PipelineExperimentConfigProperties.TRIAL_NAME,
+        "--trial-component-display-name",
+        "PromotedXGBoostModel",
+        "--model-s3-uri",
+        best_model_s3_uri,
+        "--evaluation-s3-uri",
+        evaluation_s3_uri,
+        "--evaluation-report-path",
+        "/opt/ml/processing/evaluation/evaluation.json",
+        "--summary-output-dir",
+        "/opt/ml/processing/experiment",
+        "--summary-s3-uri",
+        experiment_report_s3_uri,
+        "--model-package-group-name",
+        "xgboost-regression-models",
+        "--tuning-job-name",
+        tuning_step.properties.HyperParameterTuningJobName,
+        "--best-training-job-name",
+        tuning_step.properties.TrainingJobSummaries[0].TrainingJobName,
+        "--region",
+        region,
+    ],
+)
+
+experiment_step = ProcessingStep(
+    name="LogPromotedModelExperiment",
+    step_args=experiment_args,
+    depends_on=[evaluation_step],
+)
+
+
+# --- Step 5: Register with a ProcessingStep ---
 register_processor = ScriptProcessor(
     image_uri=sklearn_processing_image,
     command=["python3"],
@@ -270,13 +427,29 @@ register_args = register_processor.run(
 register_step = ProcessingStep(
     name="RegisterModel",
     step_args=register_args,
-    depends_on=[evaluation_step],
+    depends_on=[experiment_step],
 )
 
 pipeline = Pipeline(
     name="xgboost-eks-pipeline-v3-processing",
-    parameters=[input_data_uri, target_column, model_approval_status],
-    steps=[preprocess_step, training_step, evaluation_step, register_step],
+    parameters=[
+        input_data_uri,
+        target_column,
+        model_approval_status,
+        experiment_name,
+        mlflow_tracking_server_arn,
+    ],
+    pipeline_experiment_config=PipelineExperimentConfig(
+        experiment_name=experiment_name,
+        trial_name=ExecutionVariables.PIPELINE_EXECUTION_ID,
+    ),
+    steps=[
+        preprocess_step,
+        tuning_step,
+        evaluation_step,
+        experiment_step,
+        register_step,
+    ],
     sagemaker_session=pipeline_session,
 )
 
@@ -320,15 +493,67 @@ def assert_no_stale_local_code():
     print("Preflight passed: no stale quality-gate or metric-argument code found.")
 
 
+def configure_tuning_limits(max_tuning_jobs_value, max_parallel_tuning_jobs_value):
+    if max_tuning_jobs_value < 1:
+        raise ValueError("--max-tuning-jobs must be at least 1.")
+    if max_parallel_tuning_jobs_value < 1:
+        raise ValueError("--max-parallel-tuning-jobs must be at least 1.")
+    if max_parallel_tuning_jobs_value > max_tuning_jobs_value:
+        raise ValueError("--max-parallel-tuning-jobs cannot exceed --max-tuning-jobs.")
+
+    tuner.max_jobs = max_tuning_jobs_value
+    tuner.max_parallel_jobs = max_parallel_tuning_jobs_value
+
+
+def resolve_mlflow_tracking_server_arn(
+    mlflow_tracking_server_arn_value, mlflow_tracking_server_name_value
+):
+    if mlflow_tracking_server_arn_value and mlflow_tracking_server_name_value:
+        raise ValueError(
+            "Use either --mlflow-tracking-server-arn or "
+            "--mlflow-tracking-server-name, not both."
+        )
+
+    if mlflow_tracking_server_arn_value:
+        return mlflow_tracking_server_arn_value
+
+    if not mlflow_tracking_server_name_value:
+        return "__disabled__"
+
+    import boto3
+
+    sm_client = boto3.client("sagemaker", region_name=region)
+    response = sm_client.describe_mlflow_tracking_server(
+        TrackingServerName=mlflow_tracking_server_name_value
+    )
+    return response["TrackingServerArn"]
+
+
 def submit_pipeline(
     input_data_s3_uri,
     target_column_name="__last__",
     model_approval_status_value="PendingManualApproval",
+    experiment_name_value="xgboost-eks-experiments",
+    mlflow_tracking_server_arn_value="",
+    mlflow_tracking_server_name_value="",
+    max_tuning_jobs_value=DEFAULT_MAX_TUNING_JOBS,
+    max_parallel_tuning_jobs_value=DEFAULT_MAX_PARALLEL_TUNING_JOBS,
     wait=False,
 ):
+    configure_tuning_limits(max_tuning_jobs_value, max_parallel_tuning_jobs_value)
+    mlflow_tracking_server_arn_value = resolve_mlflow_tracking_server_arn(
+        mlflow_tracking_server_arn_value,
+        mlflow_tracking_server_name_value,
+    )
     assert_no_stale_local_code()
     assert_no_remote_function_steps()
     print(f"Using pipeline.py from: {Path(__file__).resolve()}")
+    if mlflow_tracking_server_arn_value != "__disabled__":
+        print(f"Logging MLflow runs to: {mlflow_tracking_server_arn_value}")
+    else:
+        print(
+            "MLflow tracking server not configured; writing classic/S3 experiment records only."
+        )
     print(f"Upserting pipeline: {pipeline.name}")
     pipeline.upsert(role_arn=role)
 
@@ -337,6 +562,8 @@ def submit_pipeline(
             "InputDataS3Uri": input_data_s3_uri,
             "TargetColumn": target_column_name,
             "ModelApprovalStatus": model_approval_status_value,
+            "ExperimentName": experiment_name_value,
+            "MlflowTrackingServerArn": mlflow_tracking_server_arn_value,
         }
     )
     print(f"Started execution: {execution.arn}")
@@ -370,6 +597,36 @@ if __name__ == "__main__":
         help="Initial Model Registry approval status.",
     )
     parser.add_argument(
+        "--experiment-name",
+        default="xgboost-eks-experiments",
+        help="Experiment name used for pipeline executions and MLflow runs.",
+    )
+    parser.add_argument(
+        "--mlflow-tracking-server-arn",
+        default="",
+        help="Optional SageMaker managed MLflow tracking server ARN.",
+    )
+    parser.add_argument(
+        "--mlflow-tracking-server-name",
+        default="",
+        help=(
+            "Optional SageMaker managed MLflow tracking server name. "
+            "The script resolves it to an ARN before starting the pipeline."
+        ),
+    )
+    parser.add_argument(
+        "--max-tuning-jobs",
+        type=int,
+        default=DEFAULT_MAX_TUNING_JOBS,
+        help="Maximum number of candidate training jobs for SageMaker Automatic Model Tuning.",
+    )
+    parser.add_argument(
+        "--max-parallel-tuning-jobs",
+        type=int,
+        default=DEFAULT_MAX_PARALLEL_TUNING_JOBS,
+        help="Maximum number of tuning jobs SageMaker can run in parallel.",
+    )
+    parser.add_argument(
         "--wait", action="store_true", help="Wait for the pipeline execution to finish."
     )
     args = parser.parse_args()
@@ -381,6 +638,11 @@ if __name__ == "__main__":
             args.input_data,
             target_column_name=args.target_column,
             model_approval_status_value=args.model_approval_status,
+            experiment_name_value=args.experiment_name,
+            mlflow_tracking_server_arn_value=args.mlflow_tracking_server_arn,
+            mlflow_tracking_server_name_value=args.mlflow_tracking_server_name,
+            max_tuning_jobs_value=args.max_tuning_jobs,
+            max_parallel_tuning_jobs_value=args.max_parallel_tuning_jobs,
             wait=args.wait,
         )
     else:
