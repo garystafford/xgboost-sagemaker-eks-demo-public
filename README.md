@@ -32,7 +32,7 @@ SageMaker managed MLflow Experiments
 
 Amazon SageMaker AI Model Registry
 
-![SageMaker Pipeline](./screengrabs/sagemaker_model_registry.png)
+![SageMaker Model Registry](./screengrabs/sagemaker_model_registry_v2.png)
 
 Amazon SageMaker AI Model Registry
 
