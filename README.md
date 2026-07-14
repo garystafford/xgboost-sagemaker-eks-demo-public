@@ -22,6 +22,10 @@ Amazon SageMaker Clarify Explainability
 
 ![SageMaker Clarify Explainability](./screengrabs/explainability.png)
 
+SageMaker Clarify S3 assets
+
+![SageMaker Clarify S3 assets](./screengrabs/clarify_assets.png)
+
 SageMaker managed MLflow Experiments
 
 ![SageMaker managed MLflow Experiment](./screengrabs/mlflow_experiment.png)
@@ -42,9 +46,21 @@ AWS CodeBuild
 
 ![SageMaker Pipeline](./screengrabs/codebuild.png)
 
+CodeBuild model package ARN logs
+
+![CodeBuild logs showing the model package ARN](./screengrabs/model_arn.png)
+
 Amazon Elastic Container Registry (Amazon ECR)
 
 ![SageMaker Pipeline](./screengrabs/ecr.png)
+
+Amazon Elastic Kubernetes Service (Amazon EKS)
+
+![Amazon EKS Pods](./screengrabs/eks_pods.png)
+
+Model Inference
+
+![Model Inference](./screengrabs/inference.png)
 
 ## Dataset
 
