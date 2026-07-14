@@ -1,4 +1,5 @@
 import argparse
+import json
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -31,7 +32,7 @@ def main():
 
     y = pd.to_numeric(df[target_column], errors="raise")
     x = df.drop(columns=[target_column])
-    x = pd.get_dummies(x, dummy_na=True)
+    x = pd.get_dummies(x, dummy_na=True, dtype=int)
     x = x.apply(pd.to_numeric, errors="coerce").fillna(0)
     x.insert(0, target_column, y)
 
@@ -51,6 +52,30 @@ def main():
         print(
             f"Wrote {channel_name}: {split_df.shape[0]} rows, {split_df.shape[1]} columns"
         )
+
+    analysis_dir = Path("/opt/ml/processing/analysis")
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+    test_df.to_csv(analysis_dir / "data.csv", index=False, header=True)
+
+    feature_columns = [column for column in x.columns if column != target_column]
+    baseline = train_df[feature_columns].median(numeric_only=True).fillna(0)
+    baseline.to_frame().T.to_csv(
+        analysis_dir / "baseline.csv", index=False, header=False
+    )
+    (analysis_dir / "headers.json").write_text(
+        json.dumps(
+            {
+                "label": target_column,
+                "headers": list(x.columns),
+                "feature_headers": feature_columns,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    print(
+        f"Wrote analysis dataset: {test_df.shape[0]} rows, {test_df.shape[1]} columns"
+    )
 
 
 if __name__ == "__main__":

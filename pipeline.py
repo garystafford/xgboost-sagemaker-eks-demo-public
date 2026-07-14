@@ -68,6 +68,12 @@ sklearn_processing_image = image_uris.retrieve(
     instance_type="ml.m5.large",
 )
 
+clarify_image = image_uris.retrieve(
+    framework="clarify",
+    region=region,
+    version="1.0",
+)
+
 input_data_uri = ParameterString(name="InputDataS3Uri")
 target_column = ParameterString(name="TargetColumn", default_value="__last__")
 model_approval_status = ParameterString(
@@ -117,6 +123,14 @@ preprocess_args = preprocess_processor.run(
             s3_output=ProcessingS3Output(
                 s3_uri=f"s3://{bucket}/{pipeline_prefix}/preprocessed/test",
                 local_path="/opt/ml/processing/test",
+                s3_upload_mode="EndOfJob",
+            ),
+        ),
+        ProcessingOutput(
+            output_name="analysis",
+            s3_output=ProcessingS3Output(
+                s3_uri=f"s3://{bucket}/{pipeline_prefix}/preprocessed/analysis",
+                local_path="/opt/ml/processing/analysis",
                 s3_upload_mode="EndOfJob",
             ),
         ),
@@ -306,7 +320,118 @@ rmse = JsonGet(
 )
 
 
-# --- Step 4: Log the promoted model to SageMaker Experiments ---
+# --- Step 4: Run SageMaker Clarify SHAP explainability ---
+clarify_output_s3_uri = Join(
+    on="/",
+    values=[
+        f"s3://{bucket}/{pipeline_prefix}/clarify",
+        PipelineExperimentConfigProperties.TRIAL_NAME,
+    ],
+)
+
+clarify_report_s3_uri = Join(
+    on="/",
+    values=[
+        clarify_output_s3_uri,
+        "analysis",
+        "analysis.json",
+    ],
+)
+
+analysis_data_s3_uri = Join(
+    on="/",
+    values=[
+        preprocess_step.properties.ProcessingOutputConfig.Outputs[
+            "analysis"
+        ].S3Output.S3Uri,
+        "data.csv",
+    ],
+)
+
+clarify_launcher = ScriptProcessor(
+    image_uri=sklearn_processing_image,
+    command=["python3"],
+    role=role,
+    instance_type="ml.m5.large",
+    instance_count=1,
+    base_job_name=f"{pipeline_prefix}-clarify-launcher",
+    sagemaker_session=pipeline_session,
+)
+
+clarify_args = clarify_launcher.run(
+    code=str(CODE_DIR / "run_clarify.py"),
+    inputs=[
+        ProcessingInput(
+            input_name="analysis",
+            s3_input=ProcessingS3Input(
+                s3_uri=preprocess_step.properties.ProcessingOutputConfig.Outputs[
+                    "analysis"
+                ].S3Output.S3Uri,
+                local_path="/opt/ml/processing/analysis",
+                s3_data_type="S3Prefix",
+                s3_input_mode="File",
+            ),
+        )
+    ],
+    outputs=[
+        ProcessingOutput(
+            output_name="clarify_summary",
+            s3_output=ProcessingS3Output(
+                s3_uri=Join(on="/", values=[clarify_output_s3_uri, "summary"]),
+                local_path="/opt/ml/processing/clarify_summary",
+                s3_upload_mode="EndOfJob",
+            ),
+        )
+    ],
+    arguments=[
+        "--analysis-data-dir",
+        "/opt/ml/processing/analysis",
+        "--analysis-data-s3-uri",
+        analysis_data_s3_uri,
+        "--model-s3-uri",
+        best_model_s3_uri,
+        "--inference-image-uri",
+        xgboost_image,
+        "--clarify-image-uri",
+        clarify_image,
+        "--clarify-output-s3-uri",
+        clarify_output_s3_uri,
+        "--summary-output-dir",
+        "/opt/ml/processing/clarify_summary",
+        "--role-arn",
+        role,
+        "--region",
+        region,
+        "--model-name",
+        Join(
+            on="-",
+            values=[
+                "clarify",
+                "xgb",
+                "model",
+                PipelineExperimentConfigProperties.TRIAL_NAME,
+            ],
+        ),
+        "--clarify-job-name",
+        Join(
+            on="-",
+            values=[
+                "clarify",
+                "xgb",
+                PipelineExperimentConfigProperties.TRIAL_NAME,
+            ],
+        ),
+    ],
+)
+
+clarify_step = ProcessingStep(
+    name="RunClarifyExplainability",
+    step_args=clarify_args,
+    depends_on=[evaluation_step],
+)
+
+
+# --- Step 5: Log the promoted model to SageMaker Experiments ---
 experiment_output_s3_uri = Join(
     on="/",
     values=[
@@ -371,6 +496,8 @@ experiment_args = experiment_logger.run(
         best_model_s3_uri,
         "--evaluation-s3-uri",
         evaluation_s3_uri,
+        "--clarify-report-s3-uri",
+        clarify_report_s3_uri,
         "--evaluation-report-path",
         "/opt/ml/processing/evaluation/evaluation.json",
         "--summary-output-dir",
@@ -391,11 +518,11 @@ experiment_args = experiment_logger.run(
 experiment_step = ProcessingStep(
     name="LogPromotedModelExperiment",
     step_args=experiment_args,
-    depends_on=[evaluation_step],
+    depends_on=[clarify_step],
 )
 
 
-# --- Step 5: Register with a ProcessingStep ---
+# --- Step 6: Register with a ProcessingStep ---
 register_processor = ScriptProcessor(
     image_uri=sklearn_processing_image,
     command=["python3"],
@@ -413,6 +540,8 @@ register_args = register_processor.run(
         best_model_s3_uri,
         "--metrics-s3-uri",
         evaluation_s3_uri,
+        "--explainability-report-s3-uri",
+        clarify_report_s3_uri,
         "--approval-status",
         model_approval_status,
         "--inference-image-uri",
@@ -447,6 +576,7 @@ pipeline = Pipeline(
         preprocess_step,
         tuning_step,
         evaluation_step,
+        clarify_step,
         experiment_step,
         register_step,
     ],

@@ -186,13 +186,14 @@ def log_to_mlflow(args, summary, summary_path, metrics, mlflow):
                 "best_training_job_name": args.best_training_job_name,
             }
         )
-        mlflow.set_tags(
-            {
-                "sagemaker.pipeline_trial_name": args.trial_name,
-                "sagemaker.model_s3_uri": args.model_s3_uri,
-                "sagemaker.evaluation_s3_uri": args.evaluation_s3_uri,
-            }
-        )
+        tags = {
+            "sagemaker.pipeline_trial_name": args.trial_name,
+            "sagemaker.model_s3_uri": args.model_s3_uri,
+            "sagemaker.evaluation_s3_uri": args.evaluation_s3_uri,
+        }
+        if args.clarify_report_s3_uri:
+            tags["sagemaker.clarify_report_s3_uri"] = args.clarify_report_s3_uri
+        mlflow.set_tags(tags)
         artifact_errors = []
         for local_path, artifact_path in [
             (args.evaluation_report_path, "evaluation"),
@@ -235,6 +236,7 @@ def main():
     parser.add_argument("--trial-component-display-name", required=True)
     parser.add_argument("--model-s3-uri", required=True)
     parser.add_argument("--evaluation-s3-uri", required=True)
+    parser.add_argument("--clarify-report-s3-uri")
     parser.add_argument("--evaluation-report-path", required=True)
     parser.add_argument("--summary-output-dir", required=True)
     parser.add_argument("--summary-s3-uri", required=True)
@@ -291,6 +293,12 @@ def main():
             "r2_score": r2_score,
         },
     }
+    if args.clarify_report_s3_uri:
+        artifacts["inputs"]["clarify_explainability_report"] = artifact(
+            args.clarify_report_s3_uri,
+            "application/json",
+        )
+        summary["clarify_report_s3_uri"] = args.clarify_report_s3_uri
 
     output_dir = Path(args.summary_output_dir)
     summary_path = write_summary(output_dir, summary)

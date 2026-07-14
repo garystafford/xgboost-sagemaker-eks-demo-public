@@ -8,6 +8,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-s3-uri", required=True)
     parser.add_argument("--metrics-s3-uri", required=True)
+    parser.add_argument("--explainability-report-s3-uri")
     parser.add_argument("--approval-status", required=True)
     parser.add_argument("--inference-image-uri", required=True)
     parser.add_argument("--model-package-group-name", required=True)
@@ -27,6 +28,22 @@ def main():
         if error_code != "ValidationException" or "already exists" not in error_message:
             raise
 
+    model_metrics = {
+        "ModelQuality": {
+            "Statistics": {
+                "ContentType": "application/json",
+                "S3Uri": args.metrics_s3_uri,
+            }
+        }
+    }
+    if args.explainability_report_s3_uri:
+        model_metrics["Explainability"] = {
+            "Report": {
+                "ContentType": "application/json",
+                "S3Uri": args.explainability_report_s3_uri,
+            }
+        }
+
     response = sm_client.create_model_package(
         ModelPackageGroupName=args.model_package_group_name,
         ModelApprovalStatus=args.approval_status,
@@ -40,14 +57,7 @@ def main():
             "SupportedContentTypes": ["text/csv"],
             "SupportedResponseMIMETypes": ["text/csv"],
         },
-        ModelMetrics={
-            "ModelQuality": {
-                "Statistics": {
-                    "ContentType": "application/json",
-                    "S3Uri": args.metrics_s3_uri,
-                }
-            }
-        },
+        ModelMetrics=model_metrics,
     )
 
     print(response["ModelPackageArn"])

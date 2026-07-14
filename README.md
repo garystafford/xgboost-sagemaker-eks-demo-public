@@ -2,7 +2,7 @@
 
 ## From SageMaker Training to EKS Deployment
 
-This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. The MLOps workflow uses [Amazon SageMaker AI Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html) to prepare data, tune an XGBoost regression model with [SageMaker Automatic Model Tuning](https://docs.aws.amazon.com/sagemaker/latest/dg/automatic-model-tuning.html), evaluate the best candidate, track the promoted result in [SageMaker managed MLflow Experiments](https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html), and register it in [Amazon SageMaker AI Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html). After the model is approved, the DevOps workflow uses [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/) and [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr/) to package and deploy the model-serving application to [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/eks/). [Amazon EventBridge](https://docs.aws.amazon.com/eventbridge/) connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
+This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. The MLOps workflow uses [Amazon SageMaker AI Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html) to prepare data, tune an XGBoost regression model with [SageMaker Automatic Model Tuning](https://docs.aws.amazon.com/sagemaker/latest/dg/automatic-model-tuning.html), evaluate the best candidate, explain the promoted model with [SageMaker Clarify](https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-model-explainability.html), track the promoted result in [SageMaker managed MLflow Experiments](https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html), and register it in [Amazon SageMaker AI Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html). After the model is approved, the DevOps workflow uses [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/) and [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr/) to package and deploy the model-serving application to [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/eks/). [Amazon EventBridge](https://docs.aws.amazon.com/eventbridge/) connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
 
 ### Previews
 
@@ -12,11 +12,15 @@ Amazon SageMaker AI Pipelines
 
 Amazon SageMaker AI Pipelines
 
-![SageMaker Pipeline](./screengrabs/sagemaker_pipelines_v2.png)
+![SageMaker Pipeline](./screengrabs/sagemaker_pipelines_v3.png)
 
 Amazon SageMaker AI Training And Tuning Jobs
 
 ![SageMaker Training Job](./screengrabs/sagemaker_training.png)
+
+Amazon SageMaker Clarify Explainability
+
+![SageMaker Clarify Explainability](./screengrabs/explainability.png)
 
 SageMaker managed MLflow Experiments
 
@@ -54,6 +58,7 @@ The sample Abalone dataset for this project can be found on [Kaggle](https://www
 | `PIPELINE.md`                             | Detailed walkthrough of `pipeline.py` and its SageMaker Pipeline steps.                              |
 | `code/preprocess.py`                      | Processing script that prepares train/validation/test data splits.                                   |
 | `code/evaluate.py`                        | Processing script that evaluates the best HPO XGBoost model.                                         |
+| `code/run_clarify.py`                     | Processing script that launches SageMaker Clarify SHAP explainability for the best model.            |
 | `code/log_experiment.py`                  | Processing script that records the promoted model summary in MLflow/S3 and classic Experiments APIs. |
 | `code/register_model.py`                  | Processing script that registers the model package in SageMaker.                                     |
 | `app.py`                                  | FastAPI inference service loaded into the Docker image.                                              |
@@ -76,11 +81,13 @@ flowchart TD
         C --> D["TuneXGBoost TuningStep"]
         D --> E["Best HPO training job"]
         E --> F["EvaluateModel ProcessingStep"]
-        F --> G["LogPromotedModelExperiment ProcessingStep"]
-        G --> H["SageMaker managed MLflow Experiments"]
-        G --> I["RegisterModel ProcessingStep"]
-        I --> J["SageMaker Model Registry"]
-        J --> K["Approved model package"]
+        F --> G["RunClarifyExplainability ProcessingStep"]
+        G --> H["SageMaker Clarify SHAP report"]
+        H --> I["LogPromotedModelExperiment ProcessingStep"]
+        I --> J["SageMaker managed MLflow Experiments"]
+        I --> K["RegisterModel ProcessingStep"]
+        K --> L["SageMaker Model Registry"]
+        L --> M["Approved model package"]
     end
 
     subgraph Source["GitHub source"]
@@ -90,16 +97,16 @@ flowchart TD
     end
 
     subgraph Deploy["Automated EKS deployment"]
-        K --> L["EventBridge rule"]
-        L --> M["CodeBuild project with ModelPackageArn override"]
-        S2 --> M
-        M --> N["Pull buildspec.yml, Dockerfile, app.py, deployment.yaml.tpl"]
-        N --> O["Download exact approved model.tar.gz from S3"]
-        O --> P["Build Docker image"]
-        P --> Q["Push image to ECR"]
-        Q --> R["Render deployment.yaml.tpl"]
-        R --> S["kubectl apply to deploy inference container"]
-        S --> T["Expose the inference endpoint"]
+        M --> N["EventBridge rule"]
+        N --> O["CodeBuild project with ModelPackageArn override"]
+        S2 --> O
+        O --> P["Pull buildspec.yml, Dockerfile, app.py, deployment.yaml.tpl"]
+        P --> Q["Download exact approved model.tar.gz from S3"]
+        Q --> R["Build Docker image"]
+        R --> S["Push image to ECR"]
+        S --> T["Render deployment.yaml.tpl"]
+        T --> U["kubectl apply to deploy inference container"]
+        U --> V["Expose the inference endpoint"]
     end
 ```
 
@@ -107,17 +114,17 @@ flowchart TD
 
 Before running the workflow, make sure these pieces exist.
 
-| Requirement                              | Why it is needed                                                                                                                                                                                                                                    |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AWS CLI authenticated to the account     | Used to create IAM roles, upload data to S3, inspect SageMaker, create EventBridge rules, and start CodeBuild.                                                                                                                                      |
-| SageMaker execution role                 | `pipeline.py` calls `get_execution_role()` and uses that role for processing, tuning, evaluation, Experiments tracking, and registration jobs. Run it from SageMaker Studio or another SageMaker environment where the execution role is available. |
-| Raw training CSV in S3                   | The pipeline reads the input CSV from `DATA_S3_URI`; it does not read the local CSV directly. The S3 bucket must already exist.                                                                                                                     |
-| SageMaker managed MLflow tracking server | Needed if you want runs to appear in the current Studio Experiments UI. The SageMaker execution role must be allowed to access the tracking server and write to its artifact store.                                                                 |
-| Existing EKS cluster                     | CodeBuild deploys the approved model-serving container to this cluster.                                                                                                                                                                             |
-| CodeBuild access to EKS                  | The CodeBuild service role must be authorized in EKS before `kubectl apply` can work.                                                                                                                                                               |
-| Private GitHub source access\*           | CodeBuild pulls `buildspec.yml`, `Dockerfile`, `app.py`, and `deployment.yaml.tpl` from this repo.                                                                                                                                                  |
-| ECR repository setup                     | CodeBuild pushes the model-serving image to ECR before deploying it to EKS. The setup command below creates the repository if needed.                                                                                                               |
-| SageMaker SDK v3 client                  | The local/Studio Python environment that runs `pipeline.py` needs `sagemaker==3.15.0`.                                                                                                                                                              |
+| Requirement                              | Why it is needed                                                                                                                                                                                                                                                            |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AWS CLI authenticated to the account     | Used to create IAM roles, upload data to S3, inspect SageMaker, create EventBridge rules, and start CodeBuild.                                                                                                                                                              |
+| SageMaker execution role                 | `pipeline.py` calls `get_execution_role()` and uses that role for processing, tuning, evaluation, Clarify explainability, Experiments tracking, and registration jobs. Run it from SageMaker Studio or another SageMaker environment where the execution role is available. |
+| Raw training CSV in S3                   | The pipeline reads the input CSV from `DATA_S3_URI`; it does not read the local CSV directly. The S3 bucket must already exist.                                                                                                                                             |
+| SageMaker managed MLflow tracking server | Needed if you want runs to appear in the current Studio Experiments UI. The SageMaker execution role must be allowed to access the tracking server and write to its artifact store.                                                                                         |
+| Existing EKS cluster                     | CodeBuild deploys the approved model-serving container to this cluster.                                                                                                                                                                                                     |
+| CodeBuild access to EKS                  | The CodeBuild service role must be authorized in EKS before `kubectl apply` can work.                                                                                                                                                                                       |
+| Private GitHub source access\*           | CodeBuild pulls `buildspec.yml`, `Dockerfile`, `app.py`, and `deployment.yaml.tpl` from this repo.                                                                                                                                                                          |
+| ECR repository setup                     | CodeBuild pushes the model-serving image to ECR before deploying it to EKS. The setup command below creates the repository if needed.                                                                                                                                       |
+| SageMaker SDK v3 client                  | The local/Studio Python environment that runs `pipeline.py` needs `sagemaker==3.15.0`.                                                                                                                                                                                      |
 
 _GitHub is optional. Adjust the CodeBuild project configuration to meet your requirements._
 
@@ -125,12 +132,12 @@ _GitHub is optional. Adjust the CodeBuild project configuration to meet your req
 
 This project uses three IAM roles and one EKS authorization mapping. Code in the README creates the two deployment automation roles; the SageMaker execution role is a prerequisite.
 
-| Role or mapping                        | Created in this README?              | Purpose                                                                                                                                                                                                                              |
-| -------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| SageMaker execution role               | No                                   | Used by `pipeline.py` for SageMaker processing, automatic model tuning, MLflow/classic Experiments tracking, and model registration. This comes from the SageMaker Studio or notebook environment where `get_execution_role()` runs. |
-| `CodeBuildServiceRole`                 | Yes                                  | Used by CodeBuild to read the approved model artifact from S3, read SageMaker Model Registry metadata, push the image to ECR, use the GitHub CodeConnections source credential, describe the EKS cluster, and write CloudWatch Logs. |
-| EKS access entry or `aws-auth` mapping | Yes, as a cluster authorization step | Authorizes `CodeBuildServiceRole` inside the Kubernetes cluster so `kubectl apply` and rollout commands can run. This is not a separate IAM role.                                                                                    |
-| `EventBridgeCodeBuildRole`             | Yes                                  | Used by EventBridge to call `codebuild:StartBuild` when a SageMaker model package changes to `Approved`.                                                                                                                             |
+| Role or mapping                        | Created in this README?              | Purpose                                                                                                                                                                                                                                                      |
+| -------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| SageMaker execution role               | No                                   | Used by `pipeline.py` for SageMaker processing, automatic model tuning, Clarify explainability, MLflow/classic Experiments tracking, and model registration. This comes from the SageMaker Studio or notebook environment where `get_execution_role()` runs. |
+| `CodeBuildServiceRole`                 | Yes                                  | Used by CodeBuild to read the approved model artifact from S3, read SageMaker Model Registry metadata, push the image to ECR, use the GitHub CodeConnections source credential, describe the EKS cluster, and write CloudWatch Logs.                         |
+| EKS access entry or `aws-auth` mapping | Yes, as a cluster authorization step | Authorizes `CodeBuildServiceRole` inside the Kubernetes cluster so `kubectl apply` and rollout commands can run. This is not a separate IAM role.                                                                                                            |
+| `EventBridgeCodeBuildRole`             | Yes                                  | Used by EventBridge to call `codebuild:StartBuild` when a SageMaker model package changes to `Approved`.                                                                                                                                                     |
 
 The AWS identity running these setup commands also needs permission to create IAM roles and policies, pass roles to AWS services, create EventBridge rules and targets, configure EKS access, create or inspect ECR repositories, and upload the dataset to S3.
 
@@ -173,7 +180,7 @@ python3 -m pip install "sagemaker==3.15.0"
 
 ## Trigger The SageMaker Training Pipeline
 
-This command is the manual trigger for the SageMaker training pipeline. It creates or updates the pipeline definition, starts a new pipeline execution, tunes candidate XGBoost models, evaluates the best model, logs the promoted model summary in SageMaker managed MLflow Experiments, and registers the resulting model package.
+This command is the manual trigger for the SageMaker training pipeline. It creates or updates the pipeline definition, starts a new pipeline execution, tunes candidate XGBoost models, evaluates the best model, runs SageMaker Clarify SHAP explainability, logs the promoted model summary in SageMaker managed MLflow Experiments, and registers the resulting model package.
 
 New SageMaker Studio shows MLflow-backed Experiments. Pass the tracking server name shown in Studio so `pipeline.py` can resolve the tracking server ARN before starting the run. If you omit the MLflow option, the pipeline still writes `experiment_summary.json` to S3 and records classic SageMaker Experiments API objects, but those may not appear in the current Studio Experiments page.
 
@@ -197,17 +204,20 @@ The MLflow logging step installs `mlflow` and `sagemaker-mlflow` inside the proc
 
 After the run completes, open Studio, go to Experiments, select the MLflow tracking server, and open the `$EXPERIMENT_NAME` experiment.
 
-Keep the checked-in `code/` directory next to `pipeline.py`. The pipeline references `code/preprocess.py`, `code/evaluate.py`, `code/log_experiment.py`, and `code/register_model.py` when it builds the SageMaker processing steps.
+Keep the checked-in `code/` directory next to `pipeline.py`. The pipeline references `code/preprocess.py`, `code/evaluate.py`, `code/run_clarify.py`, `code/log_experiment.py`, and `code/register_model.py` when it builds the SageMaker processing steps.
 
 The pipeline stages are:
 
-| Step                         | What it does                                                                                                                                               |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PreprocessData`             | Reads the CSV from S3, one-hot encodes categorical fields, and creates train/validation/test splits.                                                       |
-| `TuneXGBoost`                | Runs SageMaker Automatic Model Tuning and selects the best candidate by validation RMSE.                                                                   |
-| `EvaluateModel`              | Calculates RMSE and R2 for the best HPO model against the test split.                                                                                      |
-| `LogPromotedModelExperiment` | Records the promoted model artifact, tuning job, best training job, and metrics in SageMaker managed MLflow Experiments, S3, and classic Experiments APIs. |
-| `RegisterModel`              | Creates a model package in `xgboost-regression-models` using the best HPO model artifact.                                                                  |
+| Step                         | What it does                                                                                                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PreprocessData`             | Reads the CSV from S3, one-hot encodes categorical fields, and creates train/validation/test splits.                                                                       |
+| `TuneXGBoost`                | Runs SageMaker Automatic Model Tuning and selects the best candidate by validation RMSE.                                                                                   |
+| `EvaluateModel`              | Calculates RMSE and R2 for the best HPO model against the test split.                                                                                                      |
+| `RunClarifyExplainability`   | Launches SageMaker Clarify for SHAP explainability against the best HPO model.                                                                                             |
+| `LogPromotedModelExperiment` | Records the promoted model artifact, tuning job, Clarify report, best training job, and metrics in SageMaker managed MLflow Experiments, S3, and classic Experiments APIs. |
+| `RegisterModel`              | Creates a model package in `xgboost-regression-models` using the best HPO model artifact and attaches model quality plus explainability metadata.                          |
+
+The Clarify step creates a temporary SageMaker model and launches a SageMaker Clarify processing job. The SageMaker execution role therefore needs permission to create/delete SageMaker models, create/describe processing jobs, pass itself to SageMaker, read the model/data from S3, and write Clarify reports to S3.
 
 The pipeline intentionally does not use SDK v3 remote-function steps. The XGBoost container reports Python 3.9, while many Studio/local kernels are Python 3.12. Remote-function steps require those versions to match.
 
