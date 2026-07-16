@@ -6,64 +6,6 @@ This project demonstrates how MLOps and DevOps practices work together to delive
 
 The MLOps workflow uses [Amazon SageMaker AI Pipelines](https://docs.aws.amazon.com/sagemaker/latest/dg/pipelines.html) to prepare data, tune an XGBoost regression model with [SageMaker Automatic Model Tuning](https://docs.aws.amazon.com/sagemaker/latest/dg/automatic-model-tuning.html), evaluate the best candidate, explain the promoted model with [SageMaker Clarify](https://docs.aws.amazon.com/sagemaker/latest/dg/clarify-model-explainability.html), track the promoted result in [SageMaker managed MLflow Experiments](https://docs.aws.amazon.com/sagemaker/latest/dg/mlflow.html), and register it in [Amazon SageMaker AI Model Registry](https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry.html). After the model is approved, the DevOps workflow uses [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/) and [Amazon Elastic Container Registry (Amazon ECR)](https://docs.aws.amazon.com/ecr/) to package and deploy the model-serving application to [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/eks/). [Amazon EventBridge](https://docs.aws.amazon.com/eventbridge/) connects the two workflows, creating a continuous path from model approval to Kubernetes deployment.
 
-### Previews
-
-Amazon SageMaker AI Pipelines
-
-![SageMaker Pipeline](./screengrabs/sagemaker_pipeline_execution_list.png)
-
-Amazon SageMaker AI Pipelines
-
-![SageMaker Pipeline](./screengrabs/sagemaker_pipelines_v3.png)
-
-Amazon SageMaker AI Training And Tuning Jobs
-
-![SageMaker Training Job](./screengrabs/sagemaker_training.png)
-
-Amazon SageMaker Clarify Explainability
-
-![SageMaker Clarify Explainability](./screengrabs/explainability.png)
-
-SageMaker Clarify S3 assets
-
-![SageMaker Clarify S3 assets](./screengrabs/clarify_assets.png)
-
-SageMaker managed MLflow Experiments
-
-![SageMaker managed MLflow Experiment](./screengrabs/mlflow_experiment.png)
-
-Amazon SageMaker AI Model Registry
-
-![SageMaker Model Registry](./screengrabs/sagemaker_model_registry_v2.png)
-
-Amazon SageMaker AI Model Registry
-
-![SageMaker Pipeline](./screengrabs/sagemaker_model_lineage.png)
-
-Amazon EventBridge
-
-![SageMaker Pipeline](./screengrabs/eventbridge_pattern.png)
-
-AWS CodeBuild
-
-![SageMaker Pipeline](./screengrabs/codebuild.png)
-
-CodeBuild model package ARN logs
-
-![CodeBuild logs showing the model package ARN](./screengrabs/model_arn.png)
-
-Amazon Elastic Container Registry (Amazon ECR)
-
-![SageMaker Pipeline](./screengrabs/ecr.png)
-
-Amazon Elastic Kubernetes Service (Amazon EKS)
-
-![Amazon EKS Pods](./screengrabs/eks_pods.png)
-
-Model Inference
-
-![Model Inference](./screengrabs/inference.png)
-
 ## Dataset
 
 The sample Abalone dataset for this project can be found on [Kaggle](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset). The Abalone dataset is a classic tabular dataset used primarily for regression. In ML, XGBoost is a standard benchmark for predicting the age of abalones based on eight easily obtainable physical measurements.
@@ -574,6 +516,64 @@ kubectl rollout history deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE
 kubectl rollout undo deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE
 kubectl rollout undo deployment/demo-xgboost-reg-service -n $EKS_NAMESPACE --to-revision=3
 ```
+
+### Previews
+
+Amazon SageMaker AI Pipelines
+
+![SageMaker Pipeline](./screengrabs/sagemaker_pipeline_execution_list.png)
+
+Amazon SageMaker AI Pipelines
+
+![SageMaker Pipeline](./screengrabs/sagemaker_pipelines_v3.png)
+
+Amazon SageMaker AI Training And Tuning Jobs
+
+![SageMaker Training Job](./screengrabs/sagemaker_training.png)
+
+Amazon SageMaker Clarify Explainability
+
+![SageMaker Clarify Explainability](./screengrabs/explainability.png)
+
+SageMaker Clarify S3 assets
+
+![SageMaker Clarify S3 assets](./screengrabs/clarify_assets.png)
+
+SageMaker managed MLflow Experiments
+
+![SageMaker managed MLflow Experiment](./screengrabs/mlflow_experiment.png)
+
+Amazon SageMaker AI Model Registry
+
+![SageMaker Model Registry](./screengrabs/sagemaker_model_registry_v2.png)
+
+Amazon SageMaker AI Model Registry
+
+![SageMaker Pipeline](./screengrabs/sagemaker_model_lineage.png)
+
+Amazon EventBridge
+
+![SageMaker Pipeline](./screengrabs/eventbridge_pattern.png)
+
+AWS CodeBuild
+
+![SageMaker Pipeline](./screengrabs/codebuild.png)
+
+CodeBuild model package ARN logs
+
+![CodeBuild logs showing the model package ARN](./screengrabs/model_arn.png)
+
+Amazon Elastic Container Registry (Amazon ECR)
+
+![SageMaker Pipeline](./screengrabs/ecr.png)
+
+Amazon Elastic Kubernetes Service (Amazon EKS)
+
+![Amazon EKS Pods](./screengrabs/eks_pods.png)
+
+Model Inference
+
+![Model Inference](./screengrabs/inference.png)
 
 ## References
 
