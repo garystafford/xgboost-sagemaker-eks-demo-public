@@ -1,6 +1,6 @@
 # Automating Model Training and Delivery from Amazon SageMaker AI to Amazon EKS
 
-## An end-to-end walkthrough of model tuning, evaluation, explainability, registration, and approval-driven Kubernetes deployment.
+## An end-to-end walkthrough of model tuning, evaluation, explainability, registration, and approval-driven Kubernetes deployment
 
 This project demonstrates how MLOps and DevOps practices work together to deliver a trained machine learning model into production. Read the accompanying blog post, [Automating Model Training and Delivery from Amazon SageMaker AI to Amazon EKS](https://garystafford.medium.com/automating-model-training-and-delivery-from-amazon-sagemaker-ai-to-amazon-eks-4bf6e48b9f01?sharedUserId=garystafford), for more information.
 
