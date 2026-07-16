@@ -103,23 +103,17 @@ The AWS identity running these setup commands also needs permission to create IA
 
 ## Environment
 
-Replace these values for your account.
+Create a local environment file and replace its example values for your account. The `.env` file is ignored by Git; `.env.example` is the committed template. Do not put AWS access keys or other credentials in `.env`; use an AWS profile or IAM role instead.
 
 ```bash
-export AWS_ACCOUNT_ID=123456789012
-export AWS_DEFAULT_REGION=us-east-1
-export EKS_CLUSTER_NAME=my-eks-cluster
-export EKS_NAMESPACE=ml-inference
-export IMAGE_REPO_NAME=demo-xgboost-reg-service
-export MODEL_PACKAGE_GROUP=xgboost-regression-models
-export CODEBUILD_PROJECT_NAME=xgboost-eks-deploy
-export CODEBUILD_SERVICE_ROLE_NAME=CodeBuildServiceRole
-export DATA_S3_URI=s3://my-sagemaker-bucket/path/to/abalone.csv
-export EXPERIMENT_NAME=xgboost-eks-experiments
-export MLFLOW_TRACKING_SERVER_NAME=ml-flow-tracking-demo
-export MAX_TUNING_JOBS=8
-export MAX_PARALLEL_TUNING_JOBS=2
+cp .env.example .env
+# Edit .env with values for your environment.
+set -a
+source .env
+set +a
 ```
+
+`set -a` exports every variable loaded from `.env`, making it available to the AWS CLI, Python, and other child processes in the current shell. Source the file again in each new shell before running the commands below.
 
 Verify the MLflow tracking server name if you want runs to appear in the current Studio Experiments UI:
 
@@ -367,8 +361,6 @@ eksctl create iamidentitymapping \
 The rule pattern is in `eventbridge-rule.json`.
 
 ```bash
-export EVENTBRIDGE_CODEBUILD_ROLE_NAME=EventBridgeCodeBuildRole
-
 aws iam create-role \
   --role-name $EVENTBRIDGE_CODEBUILD_ROLE_NAME \
   --assume-role-policy-document file://eventbridge-codebuild-trust-policy.json
