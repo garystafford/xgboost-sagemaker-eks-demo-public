@@ -108,9 +108,7 @@ Create a local environment file and replace its example values for your account.
 ```bash
 cp .env.example .env
 # Edit .env with values for your environment.
-set -a
-source .env
-set +a
+set -a && source .env && set +a
 ```
 
 `set -a` exports every variable loaded from `.env`, making it available to the AWS CLI, Python, and other child processes in the current shell. Source the file again in each new shell before running the commands below.
