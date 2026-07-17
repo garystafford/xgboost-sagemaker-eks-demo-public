@@ -103,10 +103,10 @@ The AWS identity running these setup commands also needs permission to create IA
 
 ## Environment
 
-Create a local environment file and replace its example values for your account. The `.env` file is ignored by Git; `.env.example` is the committed template. Do not put AWS access keys or other credentials in `.env`; use an AWS profile or IAM role instead.
+Create a local environment file and replace its example values for your account. The `.env` file is ignored by Git; `env.example` is the committed template. Do not put AWS access keys or other credentials in `.env`; use an AWS profile or IAM role instead.
 
 ```bash
-cp .env.example .env
+cp env.example .env
 # Edit .env with values for your environment.
 set -a && source .env && set +a
 ```
