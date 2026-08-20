@@ -436,6 +436,8 @@ aws codebuild list-builds-for-project \
 Make sure you use the right namespace.
 
 ```bash
+aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
+
 kubectl get deployment demo-xgboost-reg-service -n $EKS_NAMESPACE \
   -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 
