@@ -126,8 +126,11 @@ aws sagemaker describe-mlflow-tracking-server \
 Install [SageMaker Python SDK v3.0](https://sagemaker.readthedocs.io/en/stable/) where you run `pipeline.py`.
 
 ```bash
-python3 -m pip install --upgrade pip
-python3 -m pip install "sagemaker==3.15.0"
+# Using venv
+python -m venv sagemaker-v3-env
+source sagemaker-v3-env/bin/activate
+pip install --upgrade pip
+pip install sagemaker
 ```
 
 ## Trigger The SageMaker Training Pipeline
