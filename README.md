@@ -585,4 +585,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Disclaimer
 
-The contents of this repository represent my viewpoints and not those of my past or current employers, including Amazon Web Services (AWS). All third-party libraries, modules, plugins, and SDKs are the property of their respective owners.
+The contents of this repository represent my viewpoints and not those of my past or current employers. All third-party libraries, modules, plugins, and SDKs are the property of their respective owners.
